@@ -1,63 +1,72 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 
 interface GuestbookEntry {
   id: number;
   name: string;
   message: string;
-  timestamp: Date;
+  createdAt: string;
 }
 
 export default function Guestbook() {
-  // Sample initial entries
-  const [entries, setEntries] = useState<GuestbookEntry[]>([
-    {
-      id: 1,
-      name: 'Sarah Chen',
-      message: 'Amazing portfolio! Your design work is truly inspiring. Love the attention to detail.',
-      timestamp: new Date('2024-01-15T10:30:00'),
-    },
-    {
-      id: 2,
-      name: 'Marcus Johnson',
-      message: 'The typography choices are perfect. Can\'t wait to see more of your projects!',
-      timestamp: new Date('2024-01-18T14:20:00'),
-    },
-    {
-      id: 3,
-      name: 'Emily Rodriguez',
-      message: 'Your brand identity work is exceptional. Would love to collaborate sometime!',
-      timestamp: new Date('2024-01-22T09:15:00'),
-    },
-  ]);
-
+  const [entries, setEntries] = useState<GuestbookEntry[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     message: '',
   });
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [status, setStatus] = useState<'idle' | 'submitting'>('idle');
+  // Fetch entries on mount
+  useEffect(() => {
+    fetchEntries();
+  }, []);
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const fetchEntries = async () => {
+    try {
+      const response = await fetch('/api/guestbook');
+      if (!response.ok) throw new Error('Failed to fetch entries');
+      const data = await response.json();
+      setEntries(data);
+    } catch (err) {
+      console.error('Error fetching guestbook entries:', err);
+      setError('Failed to load guestbook entries');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setStatus('submitting');
+    setError(null);
 
-    // Create new entry
-    const newEntry: GuestbookEntry = {
-      id: Date.now(),
-      name: formData.name,
-      message: formData.message,
-      timestamp: new Date(),
-    };
+    try {
+      const response = await fetch('/api/guestbook', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
 
-    // Add to entries (at the beginning)
-    setTimeout(() => {
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit');
+      }
+
+      const newEntry = await response.json();
       setEntries([newEntry, ...entries]);
       setFormData({ name: '', message: '' });
       setStatus('idle');
-    }, 500);
+    } catch (err: any) {
+      console.error('Error submitting guestbook entry:', err);
+      setError(err.message || 'Failed to submit entry');
+      setStatus('error');
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -67,7 +76,8 @@ export default function Guestbook() {
     });
   };
 
-  const formatDate = (date: Date) => {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -208,10 +218,37 @@ export default function Guestbook() {
           </form>
         </motion.div>
 
+        {/* Error Message */}
+        {error && (
+          <motion.div
+            className="p-4 rounded-lg mb-4"
+            style={{
+              background: 'oklch(from var(--color-error) l c h / 0.1)',
+              border: '2px solid var(--color-error)',
+            }}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <p style={{ color: 'var(--color-error)', fontSize: 'var(--font-size-sm)' }}>
+              {error}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <p className="text-muted" style={{ fontSize: 'var(--font-size-base)' }}>
+              Loading guestbook...
+            </p>
+          </div>
+        )}
+
         {/* Entries List */}
-        <div className="space-y-4">
-          <AnimatePresence>
-            {entries.map((entry, index) => (
+        {!loading && (
+          <div className="space-y-4">
+            <AnimatePresence>
+              {entries.map((entry, index) => (
               <motion.div
                 key={entry.id}
                 className="p-6 rounded-lg"
@@ -241,7 +278,7 @@ export default function Guestbook() {
                     className="text-muted"
                     style={{ fontSize: 'var(--font-size-xs)' }}
                   >
-                    {formatDate(entry.timestamp)}
+                    {formatDate(entry.createdAt)}
                   </span>
                 </div>
 
@@ -258,23 +295,24 @@ export default function Guestbook() {
               </motion.div>
             ))}
           </AnimatePresence>
-        </div>
 
-        {/* Empty State */}
-        {entries.length === 0 && (
-          <motion.div
-            className="text-center py-12"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <p
-              className="text-muted"
-              style={{ fontSize: 'var(--font-size-lg)' }}
+          {/* Empty State */}
+          {entries.length === 0 && (
+            <motion.div
+              className="text-center py-12"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
             >
-              No entries yet. Be the first to sign!
-            </p>
-          </motion.div>
+              <p
+                className="text-muted"
+                style={{ fontSize: 'var(--font-size-lg)' }}
+              >
+                No entries yet. Be the first to sign!
+              </p>
+            </motion.div>
+          )}
+        </div>
         )}
       </div>
     </section>

@@ -15,14 +15,32 @@ export default function Contact() {
     e.preventDefault();
     setStatus('sending');
 
-    // Simulate form submission (replace with actual API call later)
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send message');
+      }
+
       setStatus('success');
       setFormData({ name: '', email: '', message: '' });
 
       // Reset success message after 3 seconds
       setTimeout(() => setStatus('idle'), 3000);
-    }, 1500);
+    } catch (err: any) {
+      console.error('Error sending contact message:', err);
+      setStatus('error');
+
+      // Reset error after 3 seconds
+      setTimeout(() => setStatus('idle'), 3000);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -206,7 +224,7 @@ export default function Contact() {
                   whileTap={status !== 'sending' ? { scale: 0.98 } : {}}
                   transition={{ duration: 0.2 }}
                 >
-                  {status === 'sending' ? 'Sending...' : status === 'success' ? 'Message Sent! ✓' : 'Send Message'}
+                  {status === 'sending' ? 'Sending...' : status === 'success' ? 'Message Sent! ✓' : status === 'error' ? 'Failed. Try Again' : 'Send Message'}
                 </motion.button>
               </motion.div>
             </form>
