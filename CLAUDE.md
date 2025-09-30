@@ -76,18 +76,32 @@ The entire design system is defined in `app/globals.css` using CSS custom proper
 
 ### Component Architecture
 
-**Page Components** (all in `components/`):
+**Main Page Components** (single-page portfolio in `components/`):
 - `Header.tsx`: Sticky nav with active section detection (scroll listener + state)
 - `Hero.tsx`: Typewriter effect with useEffect hook (100ms per character)
 - `About.tsx`: Two-column layout (image + bio + skills grid)
-- `Projects.tsx`: Grid with hover overlays, separate ProjectCard subcomponent
+- `Projects.tsx`: Grid of project cards linking to `/projects/[slug]`
 - `Guestbook.tsx`: Fetches from `/api/guestbook` on mount, POST on submit
 - `Contact.tsx`: POST to `/api/contact`, success/error states
 - `Footer.tsx`: Social links with dynamic year
 
-**Main Page** (`app/page.tsx`):
-- Single-page layout importing all section components
-- Must use `'use client'` directive (Framer Motion requires client-side)
+**Project Detail Components** (case study pages):
+- `ProjectDetail.tsx`: Main layout for `/projects/[slug]` pages
+- `ProjectGallery.tsx`: Responsive image grid (2-col + full-width hero)
+- `ImageLightbox.tsx`: Full-screen viewer with keyboard nav (ESC, ←, →)
+- `ProjectProcess.tsx`: Design evolution showcase with numbered steps
+- `ProjectNavigation.tsx`: Previous/Next project buttons
+
+**Routing Architecture**:
+- `app/page.tsx`: Single-page layout with all sections (requires `'use client'`)
+- `app/projects/[slug]/page.tsx`: Dynamic routes for project case studies
+- `lib/projectsData.ts`: Central project data source (6 projects with full content structure)
+
+**Project Data Flow**:
+1. `Projects.tsx` uses `getBasicProjects()` for card grid
+2. Project cards link to `/projects/{slug}`
+3. Dynamic route uses `getProjectBySlug(slug)` to fetch full data
+4. `ProjectDetail` renders complete case study with all sub-components
 
 ### Animation Patterns
 
@@ -135,8 +149,26 @@ whileHover={{ scale: 1.05 }}  // Only transform/opacity for 60fps
 
 - `app/globals.css`: **Complete design system** - modify colors, typography, spacing here
 - `lib/prisma.ts`: Singleton Prisma client - import from here in all API routes
+- `lib/projectsData.ts`: **Central project data** - add/edit projects here
 - `prisma/schema.prisma`: Database schema - run `npx prisma generate` after changes
 - `.env`: Contains `DATABASE_URL` - **never commit this file**
+
+### Project Data Structure
+
+All project content lives in `lib/projectsData.ts`. Each project includes:
+- **Basic info**: id, slug, title, category, description, tags, year, color
+- **Overview**: problem, solution, role, deliverables, duration, client
+- **Process**: array of steps (title, description, images[])
+- **Gallery**: array of final work images
+- **Outcome**: description + optional metrics array
+- **Navigation**: nextProjectSlug, prevProjectSlug for circular navigation
+
+**Adding a new project**:
+1. Add entry to `projects` array in `lib/projectsData.ts`
+2. Update `nextProjectSlug`/`prevProjectSlug` in adjacent projects
+3. Place images in `/public/projects/{slug}/` directory
+4. Update image paths in project data structure
+5. Dynamic route automatically generates `/projects/{slug}` page
 
 ### Smooth Scroll Navigation
 
@@ -159,3 +191,29 @@ Both API routes include validation:
 - Grids adapt: 1 column → 2 columns → 3 columns
 - Mobile hamburger menu in Header with animated icon (transforms to X)
 - Fluid typography eliminates need for most media queries
+
+### Image Placeholders
+
+Currently all images use gradient placeholders with project colors:
+```tsx
+background: `linear-gradient(135deg, ${project.color}, oklch(from ${project.color} calc(l * 0.8) c calc(h + 30)))`
+```
+
+To replace with real images:
+1. Add images to `/public/projects/{slug}/` directory
+2. Update paths in `lib/projectsData.ts`:
+   - `heroImage`: Main project image (16:9 aspect)
+   - `thumbnailImage`: Card thumbnail (4:3 aspect)
+   - `process[].images[]`: Process step images
+   - `gallery[]`: Final work showcase images
+3. Replace gradient `<div>` in components with `<Image>` from `next/image`
+4. Keep gradient as fallback during loading
+
+### Lightbox Interaction
+
+`ImageLightbox.tsx` provides full-screen image viewing:
+- Click any gallery image to open
+- Keyboard: ESC (close), ← → (navigate)
+- Counter shows current position (e.g., "3 / 6")
+- Background click closes lightbox
+- Prevents body scroll when open (`document.body.style.overflow = 'hidden'`)
